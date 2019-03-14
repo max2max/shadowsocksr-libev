@@ -701,7 +701,7 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
             if (acl) {
                 if (outbound_block_match_host(host) == 1) {
                     if (verbose)
-                        LOGI("outbound blocked %s", host);
+                        LOGI("屏蔽：%s", host);
                     close_and_free_remote(EV_A_ remote);
                     close_and_free_server(EV_A_ server);
                     return;
@@ -715,13 +715,16 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
                 int err;
 
                 if (verbose)
-                    LOGI("acl_match_host %s result %d", host, host_match);
-                if (host_match > 0)
+                    LOGI("匹配ACL %s host_match %d", host, host_match);
+                if (host_match > 0) {
+                    LOGI("模式：代理 host: %s", host);
                     bypass = 0;                 // bypass hostnames in black list
-                else if (host_match < 0)
+                } else if (host_match < 0) {
+                    LOGI("模式：直连 host: %s", host);
                     bypass = 1;                 // proxy hostnames in white list
-                else {
+                } else {
                     if (atyp == 3) {            // resolve domain so we can bypass domain with geoip
+                        LOGI("域名或ip不在ACl文件中，故开始进行resolv，尝试对结果进行ACL匹配 host: %s", host);
                         err = get_sockaddr(host, port, &storage, 0, ipv6first);
                         if ( err != -1) {
                             resolved = 1;
@@ -744,7 +747,7 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
 
                     if (outbound_block_match_host(ip) == 1) {
                         if (verbose)
-                            LOGI("outbound blocked %s", ip);
+                            LOGI("屏蔽：%s", ip);
                         close_and_free_remote(EV_A_ remote);
                         close_and_free_server(EV_A_ server);
                         return;
@@ -764,11 +767,11 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
                 if (bypass) {
                     if (verbose) {
                         if (sni_detected || atyp == 3)
-                            LOGI("bypass %s:%s", host, port);
+                            LOGI("直连 %s:%s", host, port);
                         else if (atyp == 1)
-                            LOGI("bypass %s:%s", ip, port);
+                            LOGI("直连 %s:%s", ip, port);
                         else if (atyp == 4)
-                            LOGI("bypass [%s]:%s", ip, port);
+                            LOGI("直连 [%s]:%s", ip, port);
                     }
                     struct sockaddr_storage storage;
                     memset(&storage, 0, sizeof(struct sockaddr_storage));
@@ -782,6 +785,8 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
                         if (remote != NULL) remote->direct = 1;
                     }
                 }
+            } else {
+                LOGI("没有 acl");
             }
 
             // Not match ACL
@@ -801,7 +806,8 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
                 }
 
                 server->server_env = server_env;
-
+                // 与远程建立链接
+                // 安卓会产生流量统计数据
                 remote = create_remote(profile, (struct sockaddr *) server_env->addr);
             }
 
@@ -837,6 +843,7 @@ server_recv_cb(EV_P_ ev_io *w, int revents)
                 else
                     strcpy(_server_info.host, server_env->host);
                 if (verbose) {
+                    // 输出链接记录
                     LOGI("server_info host %s", _server_info.host);
                 }
                 _server_info.port = server_env->port;
@@ -1625,6 +1632,7 @@ main(int argc, char **argv)
                 break;
 #ifdef ANDROID
             case 'V':
+            // 安卓VPN模式
             vpn = 1;
             break;
         case 'P':
@@ -1967,11 +1975,11 @@ main(int argc, char **argv)
 
     free_jconf(conf);
 
-    // Enter the loop
+    LOGI("Enter the loop ev_run(loop, 0)");
     ev_run(loop, 0);
 
     if (verbose) {
-        LOGI("closed gracefully");
+        LOGI("int main closed gracefully");
     }
 
     // Clean up
@@ -2001,6 +2009,8 @@ int
 start_ss_local_server(profile_t profile)
 {
     srand(time(NULL));
+
+    LOGI("start_ss_local_server(profile_t profile)");
 
     char *remote_host = profile.remote_host;
     char *local_addr  = profile.local_addr;
@@ -2128,7 +2138,7 @@ start_ss_local_server(profile_t profile)
     ev_run(loop, 0);
 
     if (verbose) {
-        LOGI("closed gracefully");
+        LOGI("int start_ss_local_server closed gracefully");
     }
 
     // Clean up
